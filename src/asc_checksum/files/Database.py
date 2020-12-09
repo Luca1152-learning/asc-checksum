@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import pathlib
-import sys
 
 from src.asc_checksum.definitions import DATABASE_PATH
 from src.asc_checksum.scripts.checksum import checksum
@@ -79,6 +78,27 @@ class Database:
             if new_hash != old_hash:
                 modified_files.append(path)
         return modified_files
+
+    def update(self):
+        """Update the SHA256s of all the files from the paths in the database"""
+
+        paths_to_remove = []
+        for path, old_hash in self._database.items():
+            try:
+                new_hash = checksum(path)
+                if new_hash != old_hash:
+                    self._database[path] = new_hash
+                    self._logger.log_to_file_and_console(f"The hash of the file at '{path}' was updated")
+            except FileNotFoundError:
+                # The file doesn't exist anymore
+                paths_to_remove.append(path)
+
+        for path in paths_to_remove:
+            self._database.pop(path)
+            self._logger.log_to_file_and_console(
+                f"The path '{path}' was removed from the database because the file doesn't exist anymore",
+                logging.WARNING
+            )
 
     def remove(self, path):
         """
