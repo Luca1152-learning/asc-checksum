@@ -69,6 +69,8 @@ class Database:
             if added_any_path:
                 self._logger.log_to_file(f"The directory path '{path}' was added to the database")
 
+        self.save()
+
     def check_integrity(self):
         """Checks whether the hash of the files in the database has changed"""
 
@@ -116,6 +118,8 @@ class Database:
                 logging.WARNING
             )
 
+        self.save()
+
     def remove(self, path):
         """
         Remove a path from the database.
@@ -142,12 +146,15 @@ class Database:
 
             if removed_any_path:
                 self._logger.log_to_file(f"The directory path '{path}' was removed from the database")
+
         self.save()
 
     def clear(self):
         """Remove all paths from the database"""
 
         self._database = dict()
+        self.save()
+
         self._logger.log_to_file_and_console("Removed all paths from the database")
 
     def save(self):
