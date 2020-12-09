@@ -54,14 +54,15 @@ class Database:
             for file in files:
                 self._add_file(file)
 
-    def check_integrity(self):
-        """Check whether all the files from the database still have the same SHA256"""
+    def get_modified_files(self):
+        """Return the paths of the files with a different SHA256 from the one in the database"""
 
+        modified_files = []
         for path, old_hash in self._database.items():
             new_hash = checksum(path)
             if new_hash != old_hash:
-                return False
-        return True
+                modified_files.append(path)
+        return modified_files
 
     def remove(self, path):
         """
