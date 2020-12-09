@@ -69,15 +69,31 @@ class Database:
             if added_any_path:
                 self._logger.log_to_file(f"The directory path '{path}' was added to the database")
 
-    def get_modified_files(self):
-        """Return the paths of the files with a different SHA256 from the one in the database"""
+    def check_integrity(self):
+        """Checks whether the hash of the files in the database has changed"""
 
-        modified_files = []
+        found_discrepancy = False
         for path, old_hash in self._database.items():
-            new_hash = checksum(path)
-            if new_hash != old_hash:
-                modified_files.append(path)
-        return modified_files
+            try:
+                new_hash = checksum(path)
+                if new_hash != old_hash:
+                    if not found_discrepancy:
+                        found_discrepancy = True
+                        self._logger.log_to_file_and_console("Performed integrity check: FAIL")
+                    self._logger.log_to_file_and_console(
+                        f"The hash of the file at '{path}' has changed", logging.CRITICAL
+                    )
+            except FileNotFoundError:
+                # The file was deleted
+
+                if not found_discrepancy:
+                    found_discrepancy = True
+                    self._logger.log_to_file_and_console("Performed integrity check: FAIL")
+                self._logger.log_to_file_and_console(
+                    f"The file at '{path}' doesn't exist anymore", logging.CRITICAL
+                )
+        if not found_discrepancy:
+            self._logger.log_to_file_and_console("Performed integrity check: OK")
 
     def update(self):
         """Update the SHA256s of all the files from the paths in the database"""
