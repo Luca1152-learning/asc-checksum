@@ -34,11 +34,12 @@ class Database:
 
         return files
 
-    def _add_file(self, file_path):
+    def _add_file(self, file_path, warn=True):
         if file_path in self._database:
-            self._logger.log_to_console(
-                f"The path '{file_path}' already is in the database (use 'update' to overwrite)", logging.WARNING
-            )
+            if warn:
+                self._logger.log_to_console(
+                    f"The path '{file_path}' already is in the database (use 'update' to overwrite)", logging.WARNING
+                )
             return False
         else:
             self._database[file_path] = checksum(file_path)
@@ -62,14 +63,16 @@ class Database:
 
             files = self._get_files_from_directory(path)
             for file in files:
-                path_was_added = self._add_file(file)
+                path_was_added = self._add_file(file, warn=False)
                 if path_was_added:
                     added_any_path = True
 
             if added_any_path:
                 self._logger.log_to_file(f"The directory path '{path}' was added to the database")
+            else:
+                self._logger.log_to_console(f"The directory path '{path}' already is in the database")
 
-        self.save()
+        self._save()
 
     def check_integrity(self):
         """Checks whether the hash of the files in the database has changed"""
@@ -100,11 +103,13 @@ class Database:
     def update(self):
         """Update the SHA256s of all the files from the paths in the database"""
 
+        updated_any_path = False
         paths_to_remove = []
         for path, old_hash in self._database.items():
             try:
                 new_hash = checksum(path)
                 if new_hash != old_hash:
+                    updated_any_path = True
                     self._database[path] = new_hash
                     self._logger.log_to_file_and_console(f"The hash of the file at '{path}' was updated")
             except FileNotFoundError:
@@ -112,13 +117,29 @@ class Database:
                 paths_to_remove.append(path)
 
         for path in paths_to_remove:
+            updated_any_path = True
             self._database.pop(path)
             self._logger.log_to_file_and_console(
                 f"The path '{path}' was removed from the database because the file doesn't exist anymore",
                 logging.WARNING
             )
 
-        self.save()
+        if not updated_any_path:
+            self._logger.log_to_console("Everything is already up to date")
+
+        self._save()
+
+    def list(self):
+        if not self._database:
+            self._logger.log_to_console("There is no path in the database")
+        else:
+            num_paths = len(self._database)
+            if num_paths == 1:
+                self._logger.log_to_console("There is 1 path in the database:")
+            else:
+                self._logger.log_to_console(f"There are {num_paths} paths in the database:")
+            for path in self._database:
+                self._logger.log_to_console(path)
 
     def remove(self, path):
         """
@@ -141,23 +162,21 @@ class Database:
             files = self._get_files_from_directory(path)
             for file in files:
                 path = self._database.pop(file, None)
-                if path != None:
+                if path is not None:
                     removed_any_path = True
 
             if removed_any_path:
                 self._logger.log_to_file(f"The directory path '{path}' was removed from the database")
 
-        self.save()
+        self._save()
 
     def clear(self):
         """Remove all paths from the database"""
 
         self._database = dict()
-        self.save()
+        self._save()
 
         self._logger.log_to_file_and_console("Removed all paths from the database")
 
-    def save(self):
-        """Write the entire database to a JSON file"""
-
+    def _save(self):
         DATABASE_PATH.write_text(json.dumps(self._database, indent=4))
