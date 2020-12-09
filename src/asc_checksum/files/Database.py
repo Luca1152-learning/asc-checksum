@@ -4,11 +4,12 @@ import logging
 import os
 import pathlib
 
-from src.asc_checksum.definitions import DATABASE_PATH
+from src.asc_checksum.definitions import ROOT_DIR
 from src.asc_checksum.scripts.checksum import checksum
 
 
 class Database:
+    DATABASE_PATH = ROOT_DIR / "out" / "database.json"
     _database = dict()
 
     def __init__(self, logger):
@@ -19,7 +20,7 @@ class Database:
         """Load the database of files and their SHA256s into memory"""
 
         try:
-            self._database = json.loads(DATABASE_PATH.read_text(encoding="utf-8"))
+            self._database = json.loads(self.DATABASE_PATH.read_text(encoding="utf-8"))
         except FileNotFoundError:
             self._database = dict()
 
@@ -179,4 +180,4 @@ class Database:
         self._logger.log_to_file_and_console("Removed all paths from the database")
 
     def _save(self):
-        DATABASE_PATH.write_text(json.dumps(self._database, indent=4))
+        self.DATABASE_PATH.write_text(json.dumps(self._database, indent=4))
