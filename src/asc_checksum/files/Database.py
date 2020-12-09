@@ -1,31 +1,28 @@
 import glob
 import json
+import logging
 import os
 import pathlib
+import sys
 
-from src.asc_checksum.definitions import DATABASE_DIR
+from src.asc_checksum.definitions import DATABASE_PATH
 from src.asc_checksum.scripts.checksum import checksum
 
 
 class Database:
     _database = dict()
 
-    def __init__(self):
+    def __init__(self, logger):
+        self._logger = logger
         self.load()
 
     def load(self):
         """Load the database of files and their SHA256s into memory"""
 
         try:
-            self._database = json.loads(DATABASE_DIR.read_text(encoding="utf-8"))
+            self._database = json.loads(DATABASE_PATH.read_text(encoding="utf-8"))
         except FileNotFoundError:
             self._database = dict()
-
-    def _add_file(self, file_path):
-        if file_path in self._database:
-            print(f"The path '{file_path}' already is in the database (use 'update' to overwrite)")
-        else:
-            self._database[file_path] = checksum(file_path)
 
     @staticmethod
     def _get_files_from_directory(path):
@@ -38,6 +35,16 @@ class Database:
 
         return files
 
+    def _add_file(self, file_path):
+        if file_path in self._database:
+            self._logger.log_to_console(
+                f"The path '{file_path}' already is in the database (use 'update' to overwrite)", logging.WARNING
+            )
+            return False
+        else:
+            self._database[file_path] = checksum(file_path)
+            return True
+
     def add(self, path):
         """
         Add a path in the database to keep track of its hash.
@@ -46,13 +53,22 @@ class Database:
 
         # The path is a file
         if os.path.isfile(path):
-            self._add_file(path)
+            path_was_added = self._add_file(path)
+            if path_was_added:
+                self._logger.log_to_file(f"The file path '{path}' was added to the database")
 
         # The path is a directory
         else:
+            added_any_path = False
+
             files = self._get_files_from_directory(path)
             for file in files:
-                self._add_file(file)
+                path_was_added = self._add_file(file)
+                if path_was_added:
+                    added_any_path = True
+
+            if added_any_path:
+                self._logger.log_to_file(f"The directory path '{path}' was added to the database")
 
     def get_modified_files(self):
         """Return the paths of the files with a different SHA256 from the one in the database"""
@@ -67,25 +83,31 @@ class Database:
     def remove(self, path):
         """
         Remove a path from the database.
-        If it's a directory, its files will be removed instead, if found in the database.
+        If it's a directory, its files will be removed instead (if found in the database).
         """
 
         # The path a file
         if os.path.isfile(path):
             if path in self._database:
                 self._database.pop(path)
-                print(f"The file path '{path}' was removed from the database")
+                self._logger.log_to_file(f"The file path '{path}' was removed from the database")
             else:
-                print(f"The file path '{path}' was not found in the database")
+                self._logger.log_to_console(f"The file path '{path}' was not found in the database", logging.WARNING)
 
         # The path is a directory
         else:
+            removed_any_path = False
+
             files = self._get_files_from_directory(path)
             for file in files:
-                self._database.pop(file)
-            print(f"The directory path '{path}' was removed from the database")
+                path = self._database.pop(file, None)
+                if path != None:
+                    removed_any_path = True
+
+            if removed_any_path:
+                self._logger.log_to_file(f"The directory path '{path}' was removed from the database")
 
     def save(self):
         """Write the entire database to a JSON file"""
 
-        DATABASE_DIR.write_text(json.dumps(self._database, indent=4))
+        DATABASE_PATH.write_text(json.dumps(self._database, indent=4))
